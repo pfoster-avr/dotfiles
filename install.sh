@@ -13,8 +13,13 @@ set -ue
 if [ -d "/workspaces/.home" ]; then
   echo "Restoring persistent home directory..."
 
-  # Capture the cache mount device BEFORE the bind mount hides it
+  # Capture the cache mount device BEFORE we unmount it
   CACHE_DEV=$(findmnt -n -o SOURCE --target "$HOME/.cache" 2>/dev/null | sed 's/\[.*//') || true
+
+  # Unmount .cache first — bind mount fails if there are sub-mounts
+  if mountpoint -q "$HOME/.cache" 2>/dev/null; then
+    sudo umount "$HOME/.cache"
+  fi
 
   sudo mount --bind /workspaces/.home "$HOME"
 
