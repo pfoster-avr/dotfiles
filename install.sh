@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/zsh
 
 # Personal dotfiles install script for Coder.
 # Configure in Coder UI: workspace → Settings → Parameters → dotfiles URI
