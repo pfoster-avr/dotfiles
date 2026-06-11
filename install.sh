@@ -63,3 +63,14 @@ fi
 # Apply sysctl changes
 sudo sysctl -p
 echo "Sysctl configuration updated and applied."
+
+# Launch the backup daemon (if it exists and is executable)
+DAEMON="/workspaces/dotfiles/persist_home.sh"
+if [ -x "$DAEMON" ]; then
+  echo "Starting home directory backup daemon..."
+  nohup zsh "$DAEMON" > /tmp/persist_home.log 2>&1 &
+  disown
+  echo "Backup daemon started (PID $!, log at /tmp/persist_home.log)"
+else
+  echo "Backup daemon script not found or not executable at $DAEMON. Skipping daemon launch."
+fi  
