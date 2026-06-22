@@ -38,6 +38,9 @@ INTERVAL=3600  # 1 hour
 set -o pipefail
 
 note() {
+  # Exit whole script immediately if $SENTINEL does not exist
+  [ -e "$SENTINEL" ] || exit 0
+
   # Timestamped line into the sentinel log; syslog as a second channel in case
   # the sentinel write itself fails (full disk has eaten error notes before).
   echo "$(date -Iseconds) $*" >> "$SENTINEL" 2>/dev/null \
