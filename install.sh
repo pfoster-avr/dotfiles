@@ -4,14 +4,14 @@
 # Configure in Coder UI: workspace → Settings → Parameters → dotfiles URI
 # Runs after corporate install.sh, before workspace is marked "Ready".
 
-# PERSIST_SCRIPT="/workspaces/av/junk/pfoster/persist_home.sh"
+PERSIST_SCRIPT="/workspaces/av/junk/pfoster/persist_home.sh"
 
-# if [ -x "$PERSIST_SCRIPT" ]; then
-#   echo "Starting home directory backup daemon..."
-#   nohup "$PERSIST_SCRIPT" > /tmp/persist_home.log 2>&1 &
-#   disown
-#   echo "Backup daemon started (PID $!, log at /tmp/persist_home.log)"
-# fi
+if [ -x "$PERSIST_SCRIPT" ]; then
+  echo "Starting home directory backup daemon..."
+  nohup "$PERSIST_SCRIPT" > /tmp/persist_home.log 2>&1 &
+  disown
+  echo "Backup daemon started (PID $!, log at /tmp/persist_home.log)"
+fi
 
 # Install moreutils (provides `ts` for timestamping pipe output)
 sudo apt update
@@ -31,12 +31,27 @@ sudo rsync -ivaAXSH --inplace --no-l -K --exclude='**.cache' --exclude='.av_baze
 sudo rsync -ivaAXSH --inplace --no-l -K --exclude='**.cache' --exclude='.av_bazel_cache' /workspaces/home/vscode/.zshrc.local ~/
 sudo rsync -ivaAXSH --inplace --no-l -K --exclude='**.cache' --exclude='.av_bazel_cache' /workspaces/home/vscode/.aws ~/
 sudo rsync -ivaAXSH --inplace --no-l -K --exclude='**.cache' --exclude='.av_bazel_cache' /workspaces/home/vscode/.config ~/
-sudo rsync -ivaAXSH --inplace --no-l -K --exclude='**.cache' --exclude='.av_bazel_cache' /workspaces/home/vscode/.ssh ~/
+sudo rsync -ivaAXSH --inplace --no-l -K --chmod=D700,F600 --exclude='**.cache' --exclude='.av_bazel_cache' /workspaces/home/vscode/.ssh ~/ # Needs exact permissions
 sudo rsync -ivaAXSH --inplace --no-l -K --exclude='**.cache' --exclude='.av_bazel_cache' /workspaces/home/vscode/.gitconfig ~/
 
 # add source $HOME/.zshrc.local to the end of .zshrc if it's not already there
 if ! grep -q "source \$HOME/.zshrc.local" ~/.zshrc; then
   echo "source \$HOME/.zshrc.local" >> ~/.zshrc
+fi
+
+# Load the Coder/SSH environment into the current script process, so tmuxs work right
+if [ -f "$HOME/.ssh/environment" ]; then
+    echo "Loading SSH environment for tmux..."
+    # Export to current shell so 'tmux new-session' inherits them
+    export $(cat "$HOME/.ssh/environment" | xargs)
+    
+    # 2. Also inject them into the tmux global environment 
+    # (This ensures new windows created manually later also have them)
+    while read -r line; do
+        key=$(echo "$line" | cut -d= -f1)
+        val=$(echo "$line" | cut -d= -f2-)
+        tmux set-environment -g "$key" "$val"
+    done < "$HOME/.ssh/environment"
 fi
 
 # Start the "perc_run3" tmux session and launch the resume script.
@@ -96,6 +111,29 @@ fi
 # Apply sysctl changes
 sudo sysctl -p
 echo "Sysctl configuration updated and applied."
+
+
+# The above ssh stuff doesn't really work. Context says this is better:
+SSHD_CONFIG="/etc/ssh/sshd_config"
+sudo sed -i "/^ClientAliveInterval /c\ClientAliveInterval 86400" "$SSHD_CONFIG"
+sudo sed -i "/^ClientAliveCountMax /c\ClientAliveCountMax 18" "$SSHD_CONFIG"
+sudo sed -i "/^TCPKeepAlive /c\TCPKeepAlive no" "$SSHD_CONFIG"
+
+# 2. Kill the Coder-spawned sshd (it runs as root)
+# The Coder agent will not auto-restart it if you kill it manually.
+sudo pkill -f "/usr/sbin/sshd -D"
+
+# 3. Start your own "Eternal" sshd with the exact same parameters Coder expects, 
+# plus your new timeout rules.
+sudo nohup /usr/sbin/sshd -D \
+  -o "AcceptEnv=TZ" \
+  -o "PermitUserEnvironment=yes" \
+  -o "ClientAliveInterval=86400" \
+  -o "ClientAliveCountMax=18" \
+  -o "TCPKeepAlive=no" \
+  -E /var/log/sshd >/tmp/sshd_eternal.log 2>&1 &
+
+echo "Eternal SSHD started."
 
 # Launch the backup daemon (if it exists and is executable)
 DAEMON="/workspaces/dotfiles/persist_home.sh"
