@@ -22,6 +22,9 @@
 #
 # This script lives at /workspaces/dotfiles/persist_home.sh, and you can launch it as a daemon by:
 # nohup zsh /workspaces/dotfiles/persist_home.sh >/dev/null 2>&1 & ; disown
+#
+# To check if this daemon is running, look for its process:
+# pgrep -fl persist_home.sh
 
 
 BACKUP_BASE="/workspaces/home"
@@ -176,7 +179,7 @@ run_backup() {
 # stale-pidfile problem. A second copy of the daemon fails immediately.
 command -v flock >/dev/null || die "flock not installed"
 exec 9>>"$BACKUP_BASE/.daemon.lock" || die "cannot open lock file in $BACKUP_BASE"
-flock -n 9 || die "another daemon instance is already running"
+flock -n 9 || die "another daemon instance is already running at: $(pgrep -fl persist_home.sh | grep -v $$)"
 
 while true; do
   ensure_prompt_hook   # re-plant banner into freshly-wiped homes every cycle
