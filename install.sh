@@ -17,14 +17,16 @@ fi
 sudo apt update
 sudo apt install -y moreutils
 
-# move old configuration files to ~/early_backup before copying new ones!
-mkdir -p ~/early_backup
-mv ~/.tmux.conf ~/early_backup/
-mv ~/.zshrc.local ~/early_backup/
-mv ~/.aws ~/early_backup/
-mv ~/.config ~/early_backup/
-mv ~/.ssh ~/early_backup/
-mv ~/.gitconfig ~/early_backup/
+# move old configuration files to ~/early_backup before copying new ones! Only if not already there
+if [ ! -d ~/early_backup ]; then
+  mkdir -p ~/early_backup
+  mv ~/.tmux.conf ~/early_backup/
+  mv ~/.zshrc.local ~/early_backup/
+  mv ~/.aws ~/early_backup/
+  mv ~/.config ~/early_backup/
+  mv ~/.ssh ~/early_backup/
+  mv ~/.gitconfig ~/early_backup/
+fi
 
 # Copy tmux conf, .zshrc.local, AWS, config, ssh, .gitconfig configuration to home directory early
 sudo rsync -ivaAXSH --inplace --no-l -K --exclude='**.cache' --exclude='.av_bazel_cache' /workspaces/home/vscode/.tmux.conf ~/
@@ -78,19 +80,8 @@ if [ -f "$HOME/.ssh/environment" ]; then
     rm /tmp/ssh_environment_cleanup
 fi
 
-# Start the "perc_run3" tmux session and launch the vcut perception-recalculation resume script.
-# resume_perc_vcut.sh builds + drives from the 30min_perc_recalc worktree (it hardcodes that path
-# internally, so the pane CWD does not matter). It is idempotent/resumable: it recovers
-# crash-completed items and skips already-done work, so a fresh launch after a wipe continues vcut
-# where it left off. Logs to junk/pfoster/mylos_logs/ via tee.
-tmux new-session -d -s perc_run3
-sleep 2  # give tmux a moment to start the session before sending keys
-tmux send-keys -t perc_run3 "cd /workspaces/av.worktrees/30min_perc_recalc && git switch --quiet 30min_perc_recalc; /workspaces/tmp/resume_perc_vcut.sh 1400 2>&1 | tee /workspaces/tmp/perc_inspect/vcut_PROD_\$(date +%Y%m%d_%H%M%S).log" C-m
-
-# start model_dashboard
-tmux new-session -d -s model_dashboard
-sleep 2  # give tmux a moment to start the session before sending keys
-tmux send-keys -t model_dashboard "cd /workspaces/av && /workspaces/tmp/launch_dashboard.sh" C-m
+# Call start_tmuxes.sh to launch the tmux sessions for perc_run3 and model_dashboard, since the env here is messed up
+/workspaces/dotfiles/start_tmuxes.sh
 
 # Ensure SSH configuration is updated idempotently
 SSHD_CONFIG="/etc/ssh/sshd_config"
