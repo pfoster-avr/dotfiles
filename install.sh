@@ -34,6 +34,25 @@ sudo rsync -ivaAXSH --inplace --no-l -K --exclude='**.cache' --exclude='.av_baze
 sudo rsync -ivaAXSH --inplace --no-l -K --chmod=D700,F600 --exclude='**.cache' --exclude='.av_bazel_cache' /workspaces/home/vscode/.ssh ~/ # Needs exact permissions
 sudo rsync -ivaAXSH --inplace --no-l -K --exclude='**.cache' --exclude='.av_bazel_cache' /workspaces/home/vscode/.gitconfig ~/
 
+# Append old  /home/vscode/early_backup/.ssh/environment to the current .ssh/environment if it exists
+# By 1. updating any vars that exist in both
+#    and 2. appending any new vars from the old environment file
+OLD_ENV="/home/vscode/early_backup/.ssh/environment"
+NEW_ENV="$HOME/.ssh/environment"
+if [ -f "$OLD_ENV" ]; then
+  while IFS= read -r line; do
+    key=$(echo "$line" | cut -d= -f1)
+    val=$(echo "$line" | cut -d= -f2-)
+    if grep -q "^$key=" "$NEW_ENV"; then
+      # Update existing variable
+      sed -i "s|^$key=.*|$key=$val|" "$NEW_ENV"
+    else
+      # Append new variable
+      echo "$key=$val" >> "$NEW_ENV"
+    fi
+  done < "$OLD_ENV"
+fi
+
 # add source $HOME/.zshrc.local to the end of .zshrc if it's not already there
 if ! grep -q "source \$HOME/.zshrc.local" ~/.zshrc; then
   echo "source \$HOME/.zshrc.local" >> ~/.zshrc
@@ -43,15 +62,12 @@ fi
 if [ -f "$HOME/.ssh/environment" ]; then
     echo "Loading SSH environment for tmux..."
     # Export to current shell so 'tmux new-session' inherits them
-    export $(cat "$HOME/.ssh/environment" | xargs)
-    
-    # 2. Also inject them into the tmux global environment 
-    # (This ensures new windows created manually later also have them)
-    while read -r line; do
-        key=$(echo "$line" | cut -d= -f1)
-        val=$(echo "$line" | cut -d= -f2-)
-        tmux set-environment -g "$key" "$val"
-    done < "$HOME/.ssh/environment"
+    cp "$HOME/.ssh/environment" /tmp/ssh_environment_cleanup
+    sed -i -E 's/^([^=]+=)([^"].*|)$/\1"\2"/' /tmp/ssh_environment_cleanup # quote all unquoted vars
+    sed -i -E '/^[^=]*\.[^=]*=/d' /tmp/ssh_environment_cleanup # remove illegal vars containing dots
+    sed -i -E '/^PATH=/d' /tmp/ssh_environment_cleanup    # Remove PATH edits
+    set -a; source "/tmp/ssh_environment_cleanup"; set +a  #Can't call export directly on the file, so source it instead
+    rm /tmp/ssh_environment_cleanup
 fi
 
 # Start the "perc_run3" tmux session and launch the resume script.
