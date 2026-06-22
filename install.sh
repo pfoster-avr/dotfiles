@@ -53,6 +53,14 @@ if [ -f "$OLD_ENV" ]; then
   done < "$OLD_ENV"
 fi
 
+# edit /etc/ssh/sshd_config to include the environment file
+SSHD_CONFIG="/etc/ssh/sshd_config"
+if ! grep -q "^PermitUserEnvironment yes" "$SSHD_CONFIG"; then
+  echo "PermitUserEnvironment yes" | sudo tee -a "$SSHD_CONFIG" > /dev/null
+fi
+
+chmod 600 "$HOME/.ssh/environment"
+
 # add source $HOME/.zshrc.local to the end of .zshrc if it's not already there
 if ! grep -q "source \$HOME/.zshrc.local" ~/.zshrc; then
   echo "source \$HOME/.zshrc.local" >> ~/.zshrc
@@ -70,10 +78,14 @@ if [ -f "$HOME/.ssh/environment" ]; then
     rm /tmp/ssh_environment_cleanup
 fi
 
-# Start the "perc_run3" tmux session and launch the resume script.
+# Start the "perc_run3" tmux session and launch the vcut perception-recalculation resume script.
+# resume_perc_vcut.sh builds + drives from the 30min_perc_recalc worktree (it hardcodes that path
+# internally, so the pane CWD does not matter). It is idempotent/resumable: it recovers
+# crash-completed items and skips already-done work, so a fresh launch after a wipe continues vcut
+# where it left off. Logs to junk/pfoster/mylos_logs/ via tee.
 tmux new-session -d -s perc_run3
 sleep 2  # give tmux a moment to start the session before sending keys
-tmux send-keys -t perc_run3 "cd /workspaces/av.worktrees/background_mylos && git switch --quiet background_mylos && /workspaces/tmp/resume_perc.sh" C-m
+tmux send-keys -t perc_run3 "cd /workspaces/av.worktrees/30min_perc_recalc && git switch --quiet 30min_perc_recalc; /workspaces/tmp/resume_perc_vcut.sh 1400 2>&1 | tee /workspaces/tmp/perc_inspect/vcut_PROD_\$(date +%Y%m%d_%H%M%S).log" C-m
 
 # start model_dashboard
 tmux new-session -d -s model_dashboard
