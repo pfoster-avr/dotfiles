@@ -4,13 +4,9 @@
 # Configure in Coder UI: workspace → Settings → Parameters → dotfiles URI
 # Runs after corporate install.sh, before workspace is marked "Ready".
 
-PERSIST_SCRIPT="/workspaces/av/junk/pfoster/persist_home.sh"
-
-if [ -x "$PERSIST_SCRIPT" ]; then
-  echo "Starting home directory backup daemon..."
-  nohup "$PERSIST_SCRIPT" > /tmp/persist_home.log 2>&1 &
-  disown
-  echo "Backup daemon started (PID $!, log at /tmp/persist_home.log)"
+# Ensure Nix user profile binaries are in the PATH for non-interactive shells
+if [ -d "$HOME/.nix-profile/bin" ]; then
+    export PATH="$HOME/.nix-profile/bin:$PATH"
 fi
 
 # Install moreutils (provides `ts` for timestamping pipe output)
@@ -163,4 +159,16 @@ if [ -x "$DAEMON" ]; then
   echo "Backup daemon started (PID $!, log at /tmp/persist_home.log)"
 else
   echo "Backup daemon script not found or not executable at $DAEMON. Skipping daemon launch."
-fi  
+fi
+
+# Launch the Claude conversation archive daemon (mirrors ~/.claude/projects into a
+# git repo every 30 min and commits changes). See claude_convo_archive.sh.
+CONVO_DAEMON="/workspaces/dotfiles/claude_convo_archive.sh"
+if [ -x "$CONVO_DAEMON" ]; then
+  echo "Starting Claude conversation archive daemon..."
+  nohup "$CONVO_DAEMON" > /tmp/claude_convo_archive.log 2>&1 &
+  disown
+  echo "Convo archive daemon started (PID $!, log at /tmp/claude_convo_archive.log)"
+else
+  echo "Convo archive script not found or not executable at $CONVO_DAEMON. Skipping."
+fi
